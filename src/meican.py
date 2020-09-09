@@ -6,6 +6,7 @@ from functools import reduce
 
 import requests
 import random
+import time
 
 from urls import *
 from errcode import errcode as ErrCode
@@ -56,7 +57,7 @@ class MeiCan:
 
     def get_order_time_lst(self):
         order_time = []
-        close_lst = self.close_time_list
+        close_lst = list(set(self.close_time_list))
         for time_str in close_lst:
             t_item = time_str.split(":")
             hour, minute = DateUtil.date_diff_min(int(t_item[0]), int(t_item[1]), int(ConfigUtil.instance().ahead_min) * -1)
@@ -108,9 +109,11 @@ class MeiCan:
         return resp
 
     def get(self, url, data = None):
+	time.sleep(5)
         return self.query("get", url, data)
 
     def post(self, url, data = None):
+	time.sleep(5)
         return self.query("post", url, data)
 
     def account_show_info(self):
@@ -130,6 +133,7 @@ class MeiCan:
         return json.loads(self.get(restaurants_url(tab)).content)['restaurantList']
 
     def get_recommends(self, tab):
+	print self.get(recommendations_url(tab)).content
         return json.loads(self.get(recommendations_url(tab)).content)
 
     def get_dish_list(self, tab, restaurant_uid):
@@ -144,7 +148,7 @@ class MeiCan:
         re_lst = None
         dish_lst = None
 
-        if not empty_list(re_net_datas.myRegularDishList) :
+        if hasattr(re_net_datas, 'myRegularDishList') and  not empty_list(re_net_datas.myRegularDishList) :
             re_lst = re_net_datas.myRegularDishList
         if ConfigUtil.instance().other_recommend == True and  not empty_list(re_net_datas.othersRegularDishList) :
             re_lst = re_lst or []
@@ -186,13 +190,14 @@ class MeiCan:
             return ErrCode.not_avilable_tabs, None
         tab_len = len(tabs)
         if index > tab_len - 1:
-            return ErrCode.not_index_tabs, None
+	    index = 0
 
-        tab = tabs[index]
-        target_time = tab["targetTime"]
-        mill = millis()
-        if mill > target_time :
-            error("meican | no_available_tab | now:<%s>, target_time:<%s>"%(mill, target_time))
+       # tab = tabs[index]
+	mill = millis()
+	tab = [tab for tab in tabs if u'2009' in tab['title'] and mill < tab["targetTime"]]
+	#tab = [tab for tab in tabs if u'2009' in tab['title'] and mill < tab["targetTime"]]
+        if len(tab) == 0 :
+            error("meican | no_available_tab | now:<%s>, target_time:<%s>"%(mill, mill))
             return ErrCode.not_right_time_tabs, None
         return ErrCode.ok, tab
 
@@ -236,27 +241,28 @@ class MeiCan:
         return select_dish, order_desc
 
     def order_pack(self):
-        code, tab = self.available_tab()
+	code, tabs = self.available_tab() # all 餐区
         if code != ErrCode.ok:
             return code
-        user_tab_corp = tab['userTab']['corp']
-        address_uid = user_tab_corp['addressList'][0]['uniqueId']
-        price_limit_cent = user_tab_corp['priceLimitInCent']
+	for tab in tabs:
+            user_tab_corp = tab['userTab']['corp']
+            address_uid = user_tab_corp['addressList'][0]['uniqueId']
+            price_limit_cent = user_tab_corp['priceLimitInCent']
 
-        code, re_lsts = self.recommends_dish_list(tab)
-        if code != ErrCode.ok:
-            return code
-
-        dish_ids, desc_obj = self.group_dish(price_limit_cent, re_lsts)
-        if empty_list(dish_ids):
-            dish_ids, desc_obj = self.group_dish(price_limit_cent, self.restaurant_dish_list(tab))
-        if empty_list(dish_ids):
-            return ErrCode.money_dish_error
-        resp = self.order_request(tab, dish_ids, address_uid)
-        if resp["status"] == "SUCCESSFUL":
-            info("meican | order success | <%s>"%desc_obj.get_desc())
-            return ErrCode.ok
-        return ErrCode.order_error
+	    dish_ids = []
+	    desc_obj = None
+            code, re_lsts = self.recommends_dish_list(tab)
+            if code == ErrCode.ok:
+                dish_ids, desc_obj = self.group_dish(price_limit_cent, re_lsts)
+            if empty_list(dish_ids):
+                dish_ids, desc_obj = self.group_dish(price_limit_cent, self.restaurant_dish_list(tab))
+            if empty_list(dish_ids):
+                return ErrCode.money_dish_error
+            resp = self.order_request(tab, dish_ids, address_uid)
+	    print resp
+            if resp["status"] == "SUCCESSFUL":
+                info("meican | order success | <%s>"%desc_obj.get_desc())
+        return ErrCode.ok
 
     def order(self):
         code = self.order_pack()

@@ -64,10 +64,16 @@ if __name__ == '__main__':
             login_ok = meican.login()
         clear_output()
 
-    limit_lst = meican.get_order_time_lst()
-    for time_item in limit_lst:
-        time_str = "%s:%s"%(time_item.hour, time_item.minute)
-        schedule.every(1).day.at(time_str).do(order, meican)
+    schedule.every(1).day.at("06:20").do(order, meican)
+    schedule.every(1).day.at("06:40").do(order, meican)
+    schedule.every(1).day.at("07:20").do(order, meican)
+    schedule.every(1).day.at("07:40").do(order, meican)
+    schedule.every(1).day.at("12:20").do(order, meican)
+    schedule.every(1).day.at("13:20").do(order, meican)
+    schedule.every(1).day.at("14:20").do(order, meican)
+    schedule.every(1).day.at("15:20").do(order, meican)
+    schedule.every(1).day.at("16:20").do(order, meican)
+    schedule.every(1).day.at("16:50").do(order, meican)
     info("meican | next order time: | [[%s]]"%schedule.next_run())
 
     # meican.order()
